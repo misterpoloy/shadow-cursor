@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ShadowCursor</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <div class="popup">
+    <header class="popup__header">
+      <img src="assets/icon-48.png" alt="ShadowCursor" class="popup__icon" />
+      <div>
+        <h1 class="popup__title">ShadowCursor</h1>
+        <p class="popup__subtitle">AI copilot for cloud consoles</p>
+      </div>
+    </header>
+
+    <section class="popup__status" id="status-section">
+      <div class="status-badge" id="status-badge">Loading…</div>
+    </section>
+
+    <section class="popup__instructions">
+      <h2>How to use</h2>
+      <ol>
+        <li>Hold <kbd>right-click</kbd> for <strong>3 seconds</strong></li>
+        <li>Speak your command</li>
+        <li>Release — ShadowCursor acts</li>
+      </ol>
+    </section>
+
+    <footer class="popup__footer">
+      <button id="btn-settings" class="btn btn--secondary">Settings</button>
+      <span id="mode-label" class="mode-label"></span>
+    </footer>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>

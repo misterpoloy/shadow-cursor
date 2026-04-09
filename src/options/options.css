@@ -1,0 +1,189 @@
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: #0a0a14;
+  color: #e2e8f0;
+  min-height: 100vh;
+  padding: 32px 16px;
+}
+
+.options {
+  max-width: 600px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.options__header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid #1e293b;
+}
+
+.options__header img {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+}
+
+.options__header h1 {
+  font-size: 20px;
+  font-weight: 700;
+  color: #f1f5f9;
+}
+
+.options__header p {
+  font-size: 13px;
+  color: #64748b;
+  margin-top: 2px;
+}
+
+.options__body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.card {
+  background: #111827;
+  border: 1px solid #1e293b;
+  border-radius: 12px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.card h2 {
+  font-size: 13px;
+  font-weight: 600;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.radio-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.radio-label {
+  display: grid;
+  grid-template-columns: 18px 1fr;
+  grid-template-rows: auto auto;
+  column-gap: 10px;
+  cursor: pointer;
+}
+
+.radio-label input[type="radio"] {
+  margin-top: 2px;
+  accent-color: #6366f1;
+}
+
+.radio-label span {
+  font-size: 14px;
+  font-weight: 500;
+  color: #e2e8f0;
+}
+
+.radio-label small {
+  grid-column: 2;
+  font-size: 12px;
+  color: #64748b;
+  margin-top: 2px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.field label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #94a3b8;
+}
+
+.field input {
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  color: #e2e8f0;
+  font-size: 13px;
+  padding: 8px 12px;
+  outline: none;
+  transition: border-color 0.15s;
+  font-family: monospace;
+}
+
+.field input:focus {
+  border-color: #6366f1;
+}
+
+.toggle-label {
+  display: grid;
+  grid-template-columns: 18px 1fr;
+  grid-template-rows: auto auto;
+  column-gap: 10px;
+  cursor: pointer;
+}
+
+.toggle-label input[type="checkbox"] {
+  margin-top: 2px;
+  accent-color: #6366f1;
+}
+
+.toggle-label span {
+  font-size: 14px;
+  font-weight: 500;
+  color: #e2e8f0;
+}
+
+.toggle-label small {
+  grid-column: 2;
+  font-size: 12px;
+  color: #64748b;
+  margin-top: 2px;
+}
+
+.muted {
+  font-size: 13px;
+  color: #64748b;
+}
+
+.options__footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  padding-top: 8px;
+}
+
+.save-status {
+  font-size: 13px;
+  color: #4ade80;
+  font-weight: 500;
+}
+
+.btn {
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 20px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.btn:hover { opacity: 0.85; }
+
+.btn--primary {
+  background: #6366f1;
+  color: #fff;
+}
