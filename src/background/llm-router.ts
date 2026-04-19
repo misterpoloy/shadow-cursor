@@ -1,4 +1,4 @@
-import { ActionPlan, UserConfig } from '../shared/types';
+import { ActionPlan, AssistantResponse, AnswerResponse, UserConfig } from '../shared/types';
 import { AssembledContext } from './context-assembler';
 import {
   ANTHROPIC_API_URL,
@@ -8,7 +8,131 @@ import {
   OPENAI_MODEL,
 } from '../shared/constants';
 
-async function callClaude(ctx: AssembledContext, apiKey: string): Promise<ActionPlan> {
+function stripMarkdownFences(text: string): string {
+  const trimmed = text.trim();
+  const fencedMatch = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+  return fencedMatch ? fencedMatch[1].trim() : trimmed;
+}
+
+function extractJsonObject(text: string): string {
+  const start = text.indexOf('{');
+  if (start === -1) {
+    throw new Error('LLM response did not contain a JSON object');
+  }
+
+  let depth = 0;
+  let inString = false;
+  let isEscaped = false;
+
+  for (let i = start; i < text.length; i += 1) {
+    const char = text[i];
+
+    if (inString) {
+      if (isEscaped) {
+        isEscaped = false;
+        continue;
+      }
+
+      if (char === '\\') {
+        isEscaped = true;
+        continue;
+      }
+
+      if (char === '"') {
+        inString = false;
+      }
+
+      continue;
+    }
+
+    if (char === '"') {
+      inString = true;
+      continue;
+    }
+
+    if (char === '{') {
+      depth += 1;
+      continue;
+    }
+
+    if (char === '}') {
+      depth -= 1;
+      if (depth === 0) {
+        return text.slice(start, i + 1);
+      }
+    }
+  }
+
+  throw new Error('LLM response contained an incomplete JSON object');
+}
+
+function isActionPlan(value: unknown): value is ActionPlan {
+  if (!value || typeof value !== 'object') return false;
+
+  const plan = value as Partial<ActionPlan>;
+
+  return (
+    plan.mode === 'action' &&
+    typeof plan.understanding === 'string' &&
+    Array.isArray(plan.steps) &&
+    Array.isArray(plan.warnings) &&
+    typeof plan.needsMoreContext === 'boolean' &&
+    (typeof plan.followUpQuestion === 'string' || plan.followUpQuestion === null)
+  );
+}
+
+function isAnswerResponse(value: unknown): value is AnswerResponse {
+  if (!value || typeof value !== 'object') return false;
+
+  const response = value as Partial<AnswerResponse>;
+
+  return (
+    response.mode === 'answer' &&
+    typeof response.understanding === 'string' &&
+    typeof response.answer === 'string' &&
+    Array.isArray(response.bullets) &&
+    Array.isArray(response.warnings) &&
+    typeof response.needsMoreContext === 'boolean' &&
+    (typeof response.followUpQuestion === 'string' || response.followUpQuestion === null)
+  );
+}
+
+function isAssistantResponse(value: unknown): value is AssistantResponse {
+  return isActionPlan(value) || isAnswerResponse(value);
+}
+
+function parseAssistantResponse(text: string): AssistantResponse {
+  const normalized = stripMarkdownFences(text);
+  const candidates = [normalized];
+
+  if (normalized !== text.trim()) {
+    candidates.push(text.trim());
+  }
+
+  for (const candidate of candidates) {
+    try {
+      const parsed = JSON.parse(candidate) as unknown;
+      if (isAssistantResponse(parsed)) {
+        return parsed;
+      }
+    } catch {
+      // Fall through to object extraction below.
+    }
+
+    try {
+      const parsed = JSON.parse(extractJsonObject(candidate)) as unknown;
+      if (isAssistantResponse(parsed)) {
+        return parsed;
+      }
+    } catch {
+      // Try the next candidate.
+    }
+  }
+
+  throw new Error('LLM returned a response that was not a valid ShadowCursor JSON response');
+}
+
+async function callClaude(ctx: AssembledContext, apiKey: string): Promise<AssistantResponse> {
   const response = await fetch(ANTHROPIC_API_URL, {
     method: 'POST',
     headers: {
@@ -52,10 +176,10 @@ async function callClaude(ctx: AssembledContext, apiKey: string): Promise<Action
     content: Array<{ type: string; text: string }>;
   };
   const text = data.content.find((c) => c.type === 'text')?.text ?? '{}';
-  return JSON.parse(text) as ActionPlan;
+  return parseAssistantResponse(text);
 }
 
-async function callOpenAI(ctx: AssembledContext, apiKey: string): Promise<ActionPlan> {
+async function callOpenAI(ctx: AssembledContext, apiKey: string): Promise<AssistantResponse> {
   const response = await fetch(OPENAI_API_URL, {
     method: 'POST',
     headers: {
@@ -99,10 +223,10 @@ async function callOpenAI(ctx: AssembledContext, apiKey: string): Promise<Action
     choices: Array<{ message: { content: string } }>;
   };
   const text = data.choices[0].message.content;
-  return JSON.parse(text) as ActionPlan;
+  return parseAssistantResponse(text);
 }
 
-async function callProxy(ctx: AssembledContext): Promise<ActionPlan> {
+async function callProxy(ctx: AssembledContext): Promise<AssistantResponse> {
   const response = await fetch(SMARTQUIZ_PROXY_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -120,10 +244,10 @@ async function callProxy(ctx: AssembledContext): Promise<ActionPlan> {
     throw new Error(`Proxy error ${response.status}: ${err}`);
   }
 
-  return response.json() as Promise<ActionPlan>;
+  return response.json() as Promise<AssistantResponse>;
 }
 
-export async function routeToLLM(ctx: AssembledContext, config: UserConfig): Promise<ActionPlan> {
+export async function routeToLLM(ctx: AssembledContext, config: UserConfig): Promise<AssistantResponse> {
   if (config.mode === 'pro') {
     return callProxy(ctx);
   }

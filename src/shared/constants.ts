@@ -3,7 +3,6 @@ export const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
 export const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
 export const DEEPGRAM_API_URL = 'https://api.deepgram.com/v1/listen';
 
-export const TRIGGER_HOLD_MS = 3000;
 export const STEP_DELAY_MS = 500;
 export const CURSOR_ANIMATION_MS = 800;
 export const AUTO_CLICK_COUNTDOWN_MS = 1500;
@@ -26,4 +25,5 @@ export const DEFAULT_CONFIG = {
   sttProvider: 'whisper' as const,
   autoClick: false,
   confirmDestructive: true,
+  triggerMode: 'keyboard' as const,
 };

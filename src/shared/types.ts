@@ -15,6 +15,8 @@ export interface DOMElement {
   index: number;
 }
 
+export type TriggerMode = 'keyboard';
+
 export interface UserConfig {
   mode: CursorMode;
   provider: LLMProvider;
@@ -23,6 +25,7 @@ export interface UserConfig {
   sttApiKey?: string;
   autoClick: boolean;
   confirmDestructive: boolean;
+  triggerMode: TriggerMode;
 }
 
 export interface ActionStep {
@@ -35,11 +38,31 @@ export interface ActionStep {
 }
 
 export interface ActionPlan {
+  mode: 'action';
   understanding: string;
   steps: ActionStep[];
   warnings: string[];
   needsMoreContext: boolean;
   followUpQuestion: string | null;
+}
+
+export interface AnswerResponse {
+  mode: 'answer';
+  understanding: string;
+  answer: string;
+  bullets: string[];
+  warnings: string[];
+  needsMoreContext: boolean;
+  followUpQuestion: string | null;
+}
+
+export type AssistantResponse = ActionPlan | AnswerResponse;
+
+export interface ActionSession {
+  plan: ActionPlan;
+  nextStepIndex: number;
+  warningsConfirmed: boolean;
+  updatedAt: number;
 }
 
 export interface ContextPayload {
@@ -53,9 +76,13 @@ export interface ContextPayload {
 
 export type Message =
   | { type: 'CAPTURE_STARTED' }
-  | { type: 'CAPTURE_COMPLETE'; audio: ArrayBuffer; dom: DOMElement[]; url: string; title: string }
+  | { type: 'CAPTURE_COMPLETE'; audio: ArrayBuffer; transcript: string; dom: DOMElement[]; url: string; title: string }
   | { type: 'SCREENSHOT_READY'; data: string }
-  | { type: 'ACTION_PLAN'; plan: ActionPlan }
+  | { type: 'LLM_RESPONSE'; response: AssistantResponse }
+  | { type: 'GET_PENDING_ACTION_SESSION' }
+  | { type: 'REPLAN_ACTION_SESSION'; dom: DOMElement[]; url: string; title: string }
+  | { type: 'SYNC_ACTION_SESSION'; session: ActionSession }
+  | { type: 'CLEAR_ACTION_SESSION' }
   | { type: 'EXECUTE_STEP'; step: ActionStep }
   | { type: 'STEP_COMPLETE'; stepIndex: number; success: boolean }
   | { type: 'ERROR'; message: string }

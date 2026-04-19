@@ -14,7 +14,7 @@ async function init(): Promise<void> {
   }
 
   const providerName = config.provider === 'claude' ? 'Claude' : 'OpenAI';
-  modeLabel.textContent = config.mode === 'byok' ? `via ${providerName}` : 'SmartQuiz proxy';
+  modeLabel.textContent = config.mode === 'byok' ? `via ${providerName}` : 'Managed proxy';
 
   document.getElementById('btn-settings')!.addEventListener('click', () => {
     chrome.runtime.openOptionsPage();

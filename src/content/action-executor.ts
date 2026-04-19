@@ -1,47 +1,83 @@
-import { ActionPlan, ActionStep } from '../shared/types';
+import { ActionPlan, ActionStep, ActionSession } from '../shared/types';
+import { sendToServiceWorker } from '../shared/messaging';
 import { ShadowCursor } from './shadow-cursor';
 import { Highlighter } from './highlighter';
-import { STEP_DELAY_MS, AUTO_CLICK_COUNTDOWN_MS } from '../shared/constants';
+import { StepApprovalCard } from './step-approval-card';
+import { STEP_DELAY_MS } from '../shared/constants';
 
 export class ActionExecutor {
   private highlighter = new Highlighter();
+  private approvalCard = new StepApprovalCard();
 
   constructor(private cursor: ShadowCursor) {}
 
-  async execute(plan: ActionPlan): Promise<void> {
-    if (plan.warnings.length > 0) {
+  async execute(plan: ActionPlan, nextStepIndex = 0, warningsConfirmed = false): Promise<void> {
+    let shouldClearSession = false;
+    let completedAllSteps = true;
+
+    if (plan.warnings.length > 0 && !warningsConfirmed) {
       const ok = await this.confirmWarnings(plan.warnings);
-      if (!ok) return;
+      if (!ok) {
+        await this.clearActionSession();
+        return;
+      }
+      await this.syncActionSession(plan, nextStepIndex, true);
     }
 
-    this.showUnderstanding(plan.understanding);
+    this.showUnderstanding(
+      nextStepIndex > 0
+        ? `${plan.understanding} — resuming at step ${nextStepIndex + 1}`
+        : plan.understanding
+    );
     this.cursor.show();
 
-    for (let i = 0; i < plan.steps.length; i++) {
+    for (let i = nextStepIndex; i < plan.steps.length; i++) {
       const step = plan.steps[i];
-
-      if (step.confidence < 0.7) {
-        const ok = await this.confirmStep(step);
-        if (!ok) continue;
+      const approved = await this.confirmStep(step, i, plan.steps.length);
+      if (!approved) {
+        completedAllSteps = false;
+        shouldClearSession = true;
+        break;
       }
 
       try {
+        if (this.shouldPersistBeforeExecution(step)) {
+          await this.syncActionSession(plan, i + 1, true);
+        }
         await this.executeStep(step);
+        if (!this.shouldPersistBeforeExecution(step)) {
+          await this.syncActionSession(plan, i + 1, true);
+        }
       } catch (err) {
         console.error(`[ShadowCursor] Step ${i} failed:`, err);
         this.showStepError(step, err instanceof Error ? err.message : String(err));
+        completedAllSteps = false;
+        shouldClearSession = true;
+        break;
       }
 
       await this.delay(STEP_DELAY_MS);
     }
 
+    if (completedAllSteps) {
+      shouldClearSession = true;
+    }
+
+    if (shouldClearSession) {
+      await this.clearActionSession();
+    }
     this.cursor.hide();
+    this.approvalCard.hide();
+    this.highlighter.clear();
+  }
+
+  cancelActiveUI(): void {
+    this.cursor.hide();
+    this.approvalCard.hide();
     this.highlighter.clear();
   }
 
   private async executeStep(step: ActionStep): Promise<void> {
-    const el = document.querySelector<HTMLElement>(step.selector);
-
     if (step.action === 'navigate') {
       window.location.href = step.value ?? step.selector;
       return;
@@ -51,6 +87,12 @@ export class ActionExecutor {
       await this.delay(parseInt(step.value ?? '1000', 10));
       return;
     }
+
+    if (!step.selector) {
+      throw new Error('Missing selector for this action');
+    }
+
+    const el = document.querySelector<HTMLElement>(step.selector);
 
     if (!el) {
       throw new Error(`Element not found: ${step.selector}`);
@@ -66,7 +108,6 @@ export class ActionExecutor {
     this.highlighter.highlight(el, step.description);
 
     if (step.action === 'click') {
-      await this.highlighter.showCountdown(Math.round(AUTO_CLICK_COUNTDOWN_MS / 1000));
       el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
     } else if (step.action === 'type' && step.value) {
       el.focus();
@@ -96,13 +137,39 @@ export class ActionExecutor {
   }
 
   private confirmWarnings(warnings: string[]): Promise<boolean> {
-    const msg = `ShadowCursor — Potential risks:\n\n${warnings.map((w) => `• ${w}`).join('\n')}\n\nProceed?`;
-    return Promise.resolve(confirm(msg));
+    return this.approvalCard.confirmWarnings(warnings);
   }
 
-  private confirmStep(step: ActionStep): Promise<boolean> {
-    const msg = `Low confidence (${Math.round(step.confidence * 100)}%) for:\n"${step.description}"\n\nProceed?`;
-    return Promise.resolve(confirm(msg));
+  private shouldPersistBeforeExecution(step: ActionStep): boolean {
+    return step.action === 'click' || step.action === 'navigate';
+  }
+
+  private async syncActionSession(plan: ActionPlan, nextStepIndex: number, warningsConfirmed: boolean): Promise<void> {
+    const session: ActionSession = {
+      plan,
+      nextStepIndex,
+      warningsConfirmed,
+      updatedAt: Date.now(),
+    };
+    await sendToServiceWorker({ type: 'SYNC_ACTION_SESSION', session });
+  }
+
+  private async clearActionSession(): Promise<void> {
+    await sendToServiceWorker({ type: 'CLEAR_ACTION_SESSION' });
+  }
+
+  private confirmStep(step: ActionStep, stepIndex: number, totalSteps: number): Promise<boolean> {
+    let focusRect: DOMRect | null = null;
+
+    if (step.action !== 'navigate' && step.action !== 'wait') {
+      const el = document.querySelector(step.selector);
+      if (el) {
+        this.highlighter.highlight(el, step.description);
+        focusRect = el.getBoundingClientRect();
+      }
+    }
+
+    return this.approvalCard.confirm(step, stepIndex, totalSteps, focusRect);
   }
 
   private showUnderstanding(text: string): void {

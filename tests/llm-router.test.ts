@@ -91,6 +91,48 @@ describe('routeToLLM', () => {
     );
   });
 
+  it('parses Claude responses wrapped in json code fences', async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        content: [{ type: 'text', text: `\`\`\`json\n${JSON.stringify(mockPlan, null, 2)}\n\`\`\`` }],
+      }),
+    });
+
+    const config: UserConfig = {
+      mode: 'byok',
+      provider: 'claude',
+      apiKey: 'sk-ant-test',
+      sttProvider: 'whisper',
+      autoClick: false,
+      confirmDestructive: true,
+    };
+
+    const plan = await routeToLLM(mockContext, config);
+    expect(plan).toEqual(mockPlan);
+  });
+
+  it('parses OpenAI responses with surrounding prose before the JSON', async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        choices: [{ message: { content: `Here is the action plan:\n${JSON.stringify(mockPlan, null, 2)}` } }],
+      }),
+    });
+
+    const config: UserConfig = {
+      mode: 'byok',
+      provider: 'openai',
+      apiKey: 'sk-test',
+      sttProvider: 'whisper',
+      autoClick: false,
+      confirmDestructive: true,
+    };
+
+    const plan = await routeToLLM(mockContext, config);
+    expect(plan).toEqual(mockPlan);
+  });
+
   it('calls SmartQuiz proxy in pro mode', async () => {
     (global.fetch as jest.Mock).mockResolvedValueOnce({
       ok: true,

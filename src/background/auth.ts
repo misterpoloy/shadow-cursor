@@ -1,5 +1,5 @@
-// Auth placeholder — wire to Firebase/Supabase matching SmartQuiz.cloud
-// For MVP, auth state is stored in chrome.storage.sync
+// Auth placeholder for an optional managed service integration.
+// For MVP, auth state is stored in chrome.storage.sync.
 
 export interface AuthState {
   userId?: string;

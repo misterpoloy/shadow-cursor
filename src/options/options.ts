@@ -26,6 +26,10 @@ async function init(): Promise<void> {
   const sttKeyInput = document.getElementById('stt-key') as HTMLInputElement;
   sttKeyInput.value = config.sttApiKey ?? '';
 
+  // Trigger
+  const triggerRadios = document.querySelectorAll<HTMLInputElement>('input[name="trigger"]');
+  triggerRadios.forEach((r) => { r.checked = r.value === 'keyboard'; });
+
   // Behavior
   (document.getElementById('auto-click') as HTMLInputElement).checked = config.autoClick;
   (document.getElementById('confirm-destructive') as HTMLInputElement).checked = config.confirmDestructive;
@@ -44,7 +48,6 @@ async function init(): Promise<void> {
     const modeVal = (document.querySelector<HTMLInputElement>('input[name="mode"]:checked'))?.value as UserConfig['mode'];
     const providerVal = (document.querySelector<HTMLInputElement>('input[name="provider"]:checked'))?.value as UserConfig['provider'];
     const sttVal = (document.querySelector<HTMLInputElement>('input[name="stt"]:checked'))?.value as UserConfig['sttProvider'];
-
     await setConfig({
       mode: modeVal,
       provider: providerVal,
@@ -53,6 +56,7 @@ async function init(): Promise<void> {
       sttApiKey: sttKeyInput.value.trim() || undefined,
       autoClick: (document.getElementById('auto-click') as HTMLInputElement).checked,
       confirmDestructive: (document.getElementById('confirm-destructive') as HTMLInputElement).checked,
+      triggerMode: 'keyboard',
     });
 
     const status = document.getElementById('save-status')!;

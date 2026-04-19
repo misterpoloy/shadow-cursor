@@ -1,88 +1,99 @@
 import { sendToServiceWorker } from '../shared/messaging';
-import { startRecording, stopRecording } from './voice-capture';
+import {
+  startRecording,
+  stopRecording,
+  setInterimCallback,
+  setOnSilenceStop,
+  setOnSilenceCountdown,
+  getFinalTranscript,
+} from './voice-capture';
 import { scrapeDOM } from './dom-scraper';
-import { TRIGGER_HOLD_MS } from '../shared/constants';
+import { RecordingIndicator } from './recording-indicator';
+import { getLoadingIndicator } from './loading-indicator';
 
-let holdTimer: ReturnType<typeof setTimeout> | null = null;
 let isCapturing = false;
-let indicator: HTMLElement | null = null;
+let recordingIndicator: RecordingIndicator | null = null;
+const loadingIndicator = getLoadingIndicator();
+let captureX = window.innerWidth / 2;
+let captureY = window.innerHeight / 2;
+let triggerInitialized = false;
 
-function createIndicator(x: number, y: number): HTMLElement {
-  const el = document.createElement('div');
-  el.className = 'sc-trigger-indicator';
-  el.style.left = `${x - 30}px`;
-  el.style.top = `${y - 30}px`;
-  document.body.appendChild(el);
-  return el;
-}
-
-function removeIndicator(): void {
-  indicator?.remove();
-  indicator = null;
-}
-
-async function onHoldComplete(): Promise<void> {
+async function startCapture(): Promise<void> {
   if (isCapturing) return;
   isCapturing = true;
 
-  removeIndicator();
+  if (!recordingIndicator) {
+    recordingIndicator = new RecordingIndicator();
+  }
+
+  recordingIndicator.show(captureX, captureY, () => {
+    stopCapture().catch(console.error);
+  }, () => {
+    cancelCapture().catch(console.error);
+  });
+
+  setInterimCallback((text) => recordingIndicator?.updateTranscript(text));
+  setOnSilenceStop(() => stopCapture().catch(console.error));
+  setOnSilenceCountdown((ms) => recordingIndicator?.setSilenceCountdown(ms));
 
   await sendToServiceWorker({ type: 'CAPTURE_STARTED' });
   await startRecording();
 }
 
-async function onRelease(): Promise<void> {
-  if (holdTimer) {
-    clearTimeout(holdTimer);
-    holdTimer = null;
-  }
-  removeIndicator();
-
+async function stopCapture(): Promise<void> {
   if (!isCapturing) return;
   isCapturing = false;
 
+  recordingIndicator?.setProcessing();
+
   const audio = await stopRecording();
+  recordingIndicator?.hide();
+
   if (!audio) return;
 
-  const dom = scrapeDOM();
+  loadingIndicator.show(captureX, captureY);
+  try {
+    await sendToServiceWorker({
+      type: 'CAPTURE_COMPLETE',
+      audio,
+      transcript: getFinalTranscript(),
+      dom: scrapeDOM(captureX, captureY),
+      url: location.href,
+      title: document.title,
+    });
+  } catch (err) {
+    loadingIndicator.hide();
+    throw err;
+  }
+}
 
-  await sendToServiceWorker({
-    type: 'CAPTURE_COMPLETE',
-    audio,
-    dom,
-    url: location.href,
-    title: document.title,
-  });
+async function cancelCapture(): Promise<void> {
+  if (!isCapturing) return;
+  isCapturing = false;
+
+  await stopRecording();
+  recordingIndicator?.hide();
+  loadingIndicator.hide();
+}
+
+function isWakeShortcut(event: KeyboardEvent): boolean {
+  const key = event.key.toLowerCase();
+  return key === 'k' && event.shiftKey && (event.metaKey || event.ctrlKey);
 }
 
 export function initTrigger(): void {
-  document.addEventListener('mousedown', (e: MouseEvent) => {
-    if (e.button !== 2) return;
+  if (triggerInitialized) return;
+  triggerInitialized = true;
 
-    indicator = createIndicator(e.clientX, e.clientY);
+  document.addEventListener('mousemove', (event: MouseEvent) => {
+    captureX = event.clientX;
+    captureY = event.clientY;
+  }, true);
 
-    holdTimer = setTimeout(() => {
-      // Suppress context menu for this interaction
-      document.addEventListener('contextmenu', suppressContextMenu, { once: true });
-      onHoldComplete().catch(console.error);
-    }, TRIGGER_HOLD_MS);
-  });
-
-  document.addEventListener('mouseup', (e: MouseEvent) => {
-    if (e.button !== 2) return;
-    onRelease().catch(console.error);
-  });
-
-  // Cancel on movement
-  document.addEventListener('mousemove', () => {
-    if (holdTimer && !isCapturing) {
-      clearTimeout(holdTimer);
-      holdTimer = null;
-      removeIndicator();
-    }
-  });
-}
-
-function suppressContextMenu(e: Event): void {
-  e.preventDefault();
+  document.addEventListener('keydown', (event: KeyboardEvent) => {
+    if (!isWakeShortcut(event) || isCapturing) return;
+    event.preventDefault();
+    event.stopPropagation();
+    startCapture().catch(console.error);
+  }, true);
 }

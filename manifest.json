@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "ShadowCursor by SmartQuiz",
+  "name": "ShadowCursor",
   "version": "0.1.0",
   "description": "AI copilot for cloud consoles — voice-powered, vision-guided actions",
   "permissions": [

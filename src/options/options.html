@@ -28,8 +28,8 @@
           </label>
           <label class="radio-label">
             <input type="radio" name="mode" value="pro" />
-            <span>Pro — SmartQuiz.cloud</span>
-            <small>Managed API via SmartQuiz subscription (7-day trial).</small>
+            <span>Managed Proxy</span>
+            <small>Use a separately hosted proxy if your deployment provides one.</small>
           </label>
         </div>
       </section>
@@ -68,6 +68,18 @@
         <div class="field" id="stt-key-field">
           <label for="stt-key">STT API Key <small>(if different from above)</small></label>
           <input type="password" id="stt-key" placeholder="Optional — uses LLM key if blank" autocomplete="off" />
+        </div>
+      </section>
+
+      <!-- Trigger -->
+      <section class="card">
+        <h2>Trigger</h2>
+        <div class="radio-group">
+          <label class="radio-label">
+            <input type="radio" name="trigger" value="keyboard" checked />
+            <span>Keyboard Shortcut <span class="badge">Only Option</span></span>
+            <small>Press <strong>Cmd+Shift+K</strong> on macOS or <strong>Ctrl+Shift+K</strong> on other systems to start recording.</small>
+          </label>
         </div>
       </section>
 

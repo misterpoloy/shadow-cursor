@@ -1,24 +1,36 @@
 import { Message } from './types';
 
-export function sendToServiceWorker(message: Message): Promise<void> {
+function isBenignClosedPortError(message: string | undefined): boolean {
+  return message === 'The message port closed before a response was received.';
+}
+
+export function sendToServiceWorker<T = void>(message: Message): Promise<T> {
   return new Promise((resolve, reject) => {
     chrome.runtime.sendMessage(message, (response) => {
       if (chrome.runtime.lastError) {
+        if (isBenignClosedPortError(chrome.runtime.lastError.message)) {
+          resolve(response as T);
+          return;
+        }
         reject(new Error(chrome.runtime.lastError.message));
       } else {
-        resolve(response);
+        resolve(response as T);
       }
     });
   });
 }
 
-export function sendToTab(tabId: number, message: Message): Promise<void> {
+export function sendToTab<T = void>(tabId: number, message: Message): Promise<T> {
   return new Promise((resolve, reject) => {
     chrome.tabs.sendMessage(tabId, message, (response) => {
       if (chrome.runtime.lastError) {
+        if (isBenignClosedPortError(chrome.runtime.lastError.message)) {
+          resolve(response as T);
+          return;
+        }
         reject(new Error(chrome.runtime.lastError.message));
       } else {
-        resolve(response);
+        resolve(response as T);
       }
     });
   });
