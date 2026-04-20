@@ -311,6 +311,13 @@
   color: #a5b4fc;
   text-transform: uppercase;
   letter-spacing: 0.04em;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+
+.sc-step-card--dragging .sc-step-card__title {
+  cursor: grabbing;
 }
 
 .sc-step-card__body {
@@ -488,6 +495,11 @@
 
 .sc-toast--error {
   border-left-color: #ef4444;
+}
+
+.sc-toast--understanding {
+  left: 24px;
+  right: auto;
 }
 
 @keyframes sc-toast-in {

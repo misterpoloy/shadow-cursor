@@ -1,5 +1,9 @@
 # ShadowCursor
 
+<p align="center">
+  <img src="src/assets/logo_250x250.png" alt="ShadowCursor logo" width="250" height="250" />
+</p>
+
 ShadowCursor is an open-source Chrome extension that turns spoken intent into guided UI assistance for browser-based consoles and dashboards.
 
 It combines:

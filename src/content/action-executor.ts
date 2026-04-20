@@ -4,6 +4,7 @@ import { ShadowCursor } from './shadow-cursor';
 import { Highlighter } from './highlighter';
 import { StepApprovalCard } from './step-approval-card';
 import { STEP_DELAY_MS } from '../shared/constants';
+import { scrapeDOM } from './dom-scraper';
 
 export class ActionExecutor {
   private highlighter = new Highlighter();
@@ -12,28 +13,37 @@ export class ActionExecutor {
   constructor(private cursor: ShadowCursor) {}
 
   async execute(plan: ActionPlan, nextStepIndex = 0, warningsConfirmed = false): Promise<void> {
+    let activePlan = plan;
+    let activeStepIndex = nextStepIndex;
+    let activeWarningsConfirmed = warningsConfirmed;
+    let hasShownUnderstanding = false;
     let shouldClearSession = false;
     let completedAllSteps = true;
 
-    if (plan.warnings.length > 0 && !warningsConfirmed) {
-      const ok = await this.confirmWarnings(plan.warnings);
-      if (!ok) {
-        await this.clearActionSession();
-        return;
-      }
-      await this.syncActionSession(plan, nextStepIndex, true);
-    }
-
-    this.showUnderstanding(
-      nextStepIndex > 0
-        ? `${plan.understanding} — resuming at step ${nextStepIndex + 1}`
-        : plan.understanding
-    );
     this.cursor.show();
 
-    for (let i = nextStepIndex; i < plan.steps.length; i++) {
-      const step = plan.steps[i];
-      const approved = await this.confirmStep(step, i, plan.steps.length);
+    while (activeStepIndex < activePlan.steps.length) {
+      if (activePlan.warnings.length > 0 && !activeWarningsConfirmed) {
+        const ok = await this.confirmWarnings(activePlan.warnings);
+        if (!ok) {
+          await this.clearActionSession();
+          return;
+        }
+        activeWarningsConfirmed = true;
+        await this.syncActionSession(activePlan, activeStepIndex, true);
+      }
+
+      if (!hasShownUnderstanding) {
+        this.showUnderstanding(
+          activeStepIndex > 0
+            ? `${activePlan.understanding} — resuming at step ${activeStepIndex + 1}`
+            : activePlan.understanding
+        );
+        hasShownUnderstanding = true;
+      }
+
+      const step = activePlan.steps[activeStepIndex];
+      const approved = await this.confirmStep(step, activeStepIndex, activePlan.steps.length);
       if (!approved) {
         completedAllSteps = false;
         shouldClearSession = true;
@@ -42,18 +52,42 @@ export class ActionExecutor {
 
       try {
         if (this.shouldPersistBeforeExecution(step)) {
-          await this.syncActionSession(plan, i + 1, true);
+          await this.syncActionSession(activePlan, activeStepIndex + 1, activeWarningsConfirmed);
         }
         await this.executeStep(step);
         if (!this.shouldPersistBeforeExecution(step)) {
-          await this.syncActionSession(plan, i + 1, true);
+          await this.syncActionSession(activePlan, activeStepIndex + 1, activeWarningsConfirmed);
         }
       } catch (err) {
-        console.error(`[ShadowCursor] Step ${i} failed:`, err);
+        if (this.canRecoverFromStepFailure(step, err)) {
+          const replanned = await this.replanFromCurrentPage();
+          if (replanned) {
+            activePlan = replanned;
+            activeStepIndex = 0;
+            activeWarningsConfirmed = false;
+            hasShownUnderstanding = false;
+            continue;
+          }
+        }
+
+        console.error(`[ShadowCursor] Step ${activeStepIndex} failed:`, err);
         this.showStepError(step, err instanceof Error ? err.message : String(err));
         completedAllSteps = false;
         shouldClearSession = true;
         break;
+      }
+
+      activeStepIndex += 1;
+
+      if (activeStepIndex < activePlan.steps.length && this.shouldReplanAfterStep(step)) {
+        const replanned = await this.replanFromCurrentPage();
+        if (replanned) {
+          activePlan = replanned;
+          activeStepIndex = 0;
+          activeWarningsConfirmed = false;
+          hasShownUnderstanding = false;
+          continue;
+        }
       }
 
       await this.delay(STEP_DELAY_MS);
@@ -144,6 +178,19 @@ export class ActionExecutor {
     return step.action === 'click' || step.action === 'navigate';
   }
 
+  private shouldReplanAfterStep(step: ActionStep): boolean {
+    return step.action === 'click' || step.action === 'navigate';
+  }
+
+  private canRecoverFromStepFailure(step: ActionStep, err: unknown): boolean {
+    if (step.action !== 'click' && step.action !== 'type' && step.action !== 'scroll') {
+      return false;
+    }
+
+    const message = err instanceof Error ? err.message : String(err);
+    return message.startsWith('Element not found:');
+  }
+
   private async syncActionSession(plan: ActionPlan, nextStepIndex: number, warningsConfirmed: boolean): Promise<void> {
     const session: ActionSession = {
       plan,
@@ -156,6 +203,15 @@ export class ActionExecutor {
 
   private async clearActionSession(): Promise<void> {
     await sendToServiceWorker({ type: 'CLEAR_ACTION_SESSION' });
+  }
+
+  private async replanFromCurrentPage(): Promise<ActionPlan | null> {
+    return sendToServiceWorker<ActionPlan | null>({
+      type: 'REPLAN_ACTION_SESSION',
+      dom: scrapeDOM(),
+      url: location.href,
+      title: document.title,
+    });
   }
 
   private confirmStep(step: ActionStep, stepIndex: number, totalSteps: number): Promise<boolean> {
@@ -174,7 +230,7 @@ export class ActionExecutor {
 
   private showUnderstanding(text: string): void {
     const toast = document.createElement('div');
-    toast.className = 'sc-toast';
+    toast.className = 'sc-toast sc-toast--understanding';
     toast.textContent = `ShadowCursor: ${text}`;
     document.body.appendChild(toast);
     setTimeout(() => toast.remove(), 4000);

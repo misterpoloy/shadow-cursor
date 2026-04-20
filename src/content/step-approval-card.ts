@@ -12,6 +12,10 @@ export class StepApprovalCard {
   private metaEl: HTMLElement;
   private continueBtn: HTMLButtonElement;
   private cancelBtn: HTMLButtonElement;
+  private dragOffsetX = 0;
+  private dragOffsetY = 0;
+  private pointerMoveHandler: ((event: PointerEvent) => void) | null = null;
+  private pointerUpHandler: ((event: PointerEvent) => void) | null = null;
 
   constructor() {
     this.backdropEl = document.createElement('div');
@@ -36,6 +40,7 @@ export class StepApprovalCard {
 
     this.titleEl = document.createElement('div');
     this.titleEl.className = 'sc-step-card__title';
+    this.titleEl.title = 'Drag to move';
 
     this.bodyEl = document.createElement('div');
     this.bodyEl.className = 'sc-step-card__body';
@@ -63,6 +68,9 @@ export class StepApprovalCard {
     this.el.appendChild(actions);
     document.body.appendChild(this.backdropEl);
     document.body.appendChild(this.el);
+
+    this.titleEl.addEventListener('pointerdown', this.handlePointerDown);
+    window.addEventListener('resize', this.handleWindowResize);
   }
 
   async confirm(
@@ -175,8 +183,72 @@ export class StepApprovalCard {
   }
 
   hide(): void {
+    this.teardownDrag();
     this.backdropEl.classList.add('sc-step-backdrop--hidden');
     this.el.classList.add('sc-step-card--hidden');
+  }
+
+  private handlePointerDown = (event: PointerEvent): void => {
+    if (event.button !== 0) return;
+
+    const rect = this.el.getBoundingClientRect();
+    this.dragOffsetX = event.clientX - rect.left;
+    this.dragOffsetY = event.clientY - rect.top;
+
+    this.pinToViewportPosition(rect.left, rect.top);
+    this.el.classList.add('sc-step-card--dragging');
+
+    this.pointerMoveHandler = (moveEvent: PointerEvent) => {
+      const nextLeft = moveEvent.clientX - this.dragOffsetX;
+      const nextTop = moveEvent.clientY - this.dragOffsetY;
+      this.pinToViewportPosition(nextLeft, nextTop);
+    };
+
+    this.pointerUpHandler = () => {
+      this.teardownDrag();
+    };
+
+    this.titleEl.setPointerCapture(event.pointerId);
+    document.addEventListener('pointermove', this.pointerMoveHandler, true);
+    document.addEventListener('pointerup', this.pointerUpHandler, true);
+
+    event.preventDefault();
+  };
+
+  private handleWindowResize = (): void => {
+    if (this.el.classList.contains('sc-step-card--hidden')) return;
+
+    const rect = this.el.getBoundingClientRect();
+    if (this.el.style.left || this.el.style.top) {
+      this.pinToViewportPosition(rect.left, rect.top);
+    }
+  };
+
+  private teardownDrag(): void {
+    this.el.classList.remove('sc-step-card--dragging');
+
+    if (this.pointerMoveHandler) {
+      document.removeEventListener('pointermove', this.pointerMoveHandler, true);
+      this.pointerMoveHandler = null;
+    }
+
+    if (this.pointerUpHandler) {
+      document.removeEventListener('pointerup', this.pointerUpHandler, true);
+      this.pointerUpHandler = null;
+    }
+  }
+
+  private pinToViewportPosition(left: number, top: number): void {
+    const rect = this.el.getBoundingClientRect();
+    const maxLeft = Math.max(8, window.innerWidth - rect.width - 8);
+    const maxTop = Math.max(8, window.innerHeight - rect.height - 8);
+    const clampedLeft = Math.min(Math.max(8, left), maxLeft);
+    const clampedTop = Math.min(Math.max(8, top), maxTop);
+
+    this.el.style.left = `${clampedLeft}px`;
+    this.el.style.top = `${clampedTop}px`;
+    this.el.style.right = 'auto';
+    this.el.style.bottom = 'auto';
   }
 
   private setFocusRect(rect: DOMRect | null): void {
